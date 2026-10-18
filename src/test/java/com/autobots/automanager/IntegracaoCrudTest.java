@@ -311,4 +311,32 @@ class IntegracaoCrudTest {
         Collections.sort(ordenados);
         assertEquals(ordenados, ids, "a listagem nao veio ordenada por id");
     }
+
+    @Test
+    @DisplayName("HATEOAS: do cliente se chega ao telefone seguindo apenas os links")
+    void navegacaoPelosLinks() throws Exception {
+        long idCliente = cadastrar("""
+                { "nome": "Navegador",
+                  "telefones": [ { "ddd": "13", "numero": "981234567" } ] }
+                """);
+
+        String cliente = requisicao.perform(get("/cliente/" + idCliente))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String linkTelefones = JsonPath.read(cliente, "$._links.telefones.href");
+
+        String telefones = requisicao.perform(get(linkTelefones))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andReturn().getResponse().getContentAsString();
+        String linkTelefone = JsonPath.read(telefones, "$[0].links[0].href");
+
+        String telefone = requisicao.perform(get(linkTelefone))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ddd").value("13"))
+                .andReturn().getResponse().getContentAsString();
+        String linkProprio = JsonPath.read(telefone, "$._links.self.href");
+
+        assertEquals(linkTelefone, linkProprio);
+    }
 }

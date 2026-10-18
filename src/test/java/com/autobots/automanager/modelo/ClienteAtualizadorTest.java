@@ -1,7 +1,6 @@
 package com.autobots.automanager.modelo;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.util.Calendar;
 import java.util.Date;

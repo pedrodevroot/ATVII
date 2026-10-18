@@ -34,10 +34,11 @@ import com.autobots.automanager.conversores.ClienteConversor;
 import com.autobots.automanager.entidades.Cliente;
 import com.autobots.automanager.entidades.Telefone;
 import com.autobots.automanager.excecoes.RecursoNaoEncontradoException;
+import com.autobots.automanager.modelo.AdicionadorLinkCliente;
 import com.autobots.automanager.servicos.ClienteServico;
 
 @WebMvcTest(ClienteControle.class)
-@Import(ClienteConversor.class)
+@Import({ ClienteConversor.class, AdicionadorLinkCliente.class })
 class ClienteControleTest {
 
     @Autowired
@@ -287,5 +288,75 @@ class ClienteControleTest {
                 .andExpect(status().isMethodNotAllowed());
 
         verify(servico, never()).excluir(anyLong());
+    }
+
+    @Test
+    @DisplayName("GET /cliente/{id}: links self, clientes, telefones, documentos e enderecos")
+    void obterPorIdComLinks() throws Exception {
+        when(servico.obterPorId(1L)).thenReturn(cliente(1L, "Pedro de Alcantara"));
+
+        requisicao.perform(get("/cliente/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$._links.self.href").value("http://localhost/cliente/1"))
+                .andExpect(jsonPath("$._links.clientes.href").value("http://localhost/cliente/clientes"))
+                .andExpect(jsonPath("$._links.telefones.href").value("http://localhost/cliente/1/telefones"))
+                .andExpect(jsonPath("$._links.documentos.href").value("http://localhost/cliente/1/documentos"))
+                .andExpect(jsonPath("$._links.enderecos.href").value("http://localhost/cliente/1/enderecos"));
+    }
+
+    @Test
+    @DisplayName("GET /cliente/clientes: link self em cada cliente da lista")
+    void listarComLinks() throws Exception {
+        when(servico.listar()).thenReturn(List.of(cliente(1L, "Primeiro"), cliente(2L, "Segundo")));
+
+        requisicao.perform(get("/cliente/clientes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].links.length()").value(1))
+                .andExpect(jsonPath("$[0].links[0].rel").value("self"))
+                .andExpect(jsonPath("$[0].links[0].href").value("http://localhost/cliente/1"))
+                .andExpect(jsonPath("$[1].links[0].rel").value("self"))
+                .andExpect(jsonPath("$[1].links[0].href").value("http://localhost/cliente/2"));
+    }
+
+    @Test
+    @DisplayName("POST /cliente/cadastro: resposta com link self do cliente criado")
+    void cadastrarComLinks() throws Exception {
+        when(servico.cadastrar(any(Cliente.class))).thenReturn(cliente(2L, "Maria Silva"));
+
+        String corpo = """
+                { "nome": "Maria Silva" }
+                """;
+
+        requisicao.perform(post("/cliente/cadastro")
+                .contentType(MediaType.APPLICATION_JSON).content(corpo))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$._links.self.href").value("http://localhost/cliente/2"));
+    }
+
+    @Test
+    @DisplayName("PUT /cliente/atualizar: resposta com link self do cliente atualizado")
+    void atualizarComLinks() throws Exception {
+        when(servico.atualizar(any(Cliente.class))).thenReturn(cliente(1L, "Nome Novo"));
+
+        String corpo = """
+                { "id": 1, "nome": "Nome Novo" }
+                """;
+
+        requisicao.perform(put("/cliente/atualizar")
+                .contentType(MediaType.APPLICATION_JSON).content(corpo))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$._links.self.href").value("http://localhost/cliente/1"));
+    }
+
+    @Test
+    @DisplayName("GET /cliente/{id}: resposta de erro nao tem links")
+    void erroSemLinks() throws Exception {
+        when(servico.obterPorId(999L))
+                .thenThrow(new RecursoNaoEncontradoException("Cliente", 999L));
+
+        requisicao.perform(get("/cliente/999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$._links").doesNotExist())
+                .andExpect(jsonPath("$.links").doesNotExist());
     }
 }

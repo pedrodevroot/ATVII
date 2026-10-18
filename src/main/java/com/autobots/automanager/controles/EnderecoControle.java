@@ -20,6 +20,7 @@ import com.autobots.automanager.dtos.EnderecoAtualizacaoDto;
 import com.autobots.automanager.dtos.EnderecoCadastroDto;
 import com.autobots.automanager.dtos.EnderecoDto;
 import com.autobots.automanager.entidades.Endereco;
+import com.autobots.automanager.modelo.AdicionadorLinkEndereco;
 import com.autobots.automanager.servicos.EnderecoServico;
 
 @RestController
@@ -29,30 +30,40 @@ public class EnderecoControle {
     private EnderecoServico servico;
     @Autowired
     private EnderecoConversor conversor;
+    @Autowired
+    private AdicionadorLinkEndereco adicionadorLink;
 
     @GetMapping("/cliente/{clienteId}/enderecos")
     public ResponseEntity<List<EnderecoDto>> obterEnderecos(@PathVariable long clienteId) {
-        return ResponseEntity.ok(conversor.paraResposta(servico.listarPorCliente(clienteId)));
+        List<EnderecoDto> resposta = conversor.paraResposta(servico.listarPorCliente(clienteId));
+        adicionadorLink.adicionarLink(resposta);
+        return ResponseEntity.ok(resposta);
     }
 
     @PostMapping("/cliente/{clienteId}/enderecos")
     public ResponseEntity<EnderecoDto> cadastrarEndereco(@PathVariable long clienteId,
             @Valid @RequestBody EnderecoCadastroDto dto) {
         Endereco criado = servico.criar(clienteId, conversor.paraEntidade(dto));
+        EnderecoDto resposta = conversor.paraResposta(criado);
+        adicionadorLink.adicionarLink(resposta);
         return ResponseEntity.created(URI.create("/endereco/" + criado.getId()))
-                .body(conversor.paraResposta(criado));
+                .body(resposta);
     }
 
     @GetMapping("/endereco/{id}")
     public ResponseEntity<EnderecoDto> obterEndereco(@PathVariable long id) {
-        return ResponseEntity.ok(conversor.paraResposta(servico.obterPorId(id)));
+        EnderecoDto resposta = conversor.paraResposta(servico.obterPorId(id));
+        adicionadorLink.adicionarLink(resposta);
+        return ResponseEntity.ok(resposta);
     }
 
     @PutMapping("/endereco/{id}")
     public ResponseEntity<EnderecoDto> atualizarEndereco(@PathVariable long id,
             @Valid @RequestBody EnderecoAtualizacaoDto dto) {
         Endereco atualizado = servico.atualizar(id, conversor.paraEntidade(dto));
-        return ResponseEntity.ok(conversor.paraResposta(atualizado));
+        EnderecoDto resposta = conversor.paraResposta(atualizado);
+        adicionadorLink.adicionarLink(resposta);
+        return ResponseEntity.ok(resposta);
     }
 
     @DeleteMapping("/endereco/{id}")

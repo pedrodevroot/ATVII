@@ -20,6 +20,7 @@ import com.autobots.automanager.dtos.DocumentoAtualizacaoDto;
 import com.autobots.automanager.dtos.DocumentoCadastroDto;
 import com.autobots.automanager.dtos.DocumentoDto;
 import com.autobots.automanager.entidades.Documento;
+import com.autobots.automanager.modelo.AdicionadorLinkDocumento;
 import com.autobots.automanager.servicos.DocumentoServico;
 
 @RestController
@@ -29,30 +30,40 @@ public class DocumentoControle {
     private DocumentoServico servico;
     @Autowired
     private DocumentoConversor conversor;
+    @Autowired
+    private AdicionadorLinkDocumento adicionadorLink;
 
     @GetMapping("/cliente/{clienteId}/documentos")
     public ResponseEntity<List<DocumentoDto>> obterDocumentos(@PathVariable long clienteId) {
-        return ResponseEntity.ok(conversor.paraResposta(servico.listarPorCliente(clienteId)));
+        List<DocumentoDto> resposta = conversor.paraResposta(servico.listarPorCliente(clienteId));
+        adicionadorLink.adicionarLink(resposta);
+        return ResponseEntity.ok(resposta);
     }
 
     @PostMapping("/cliente/{clienteId}/documentos")
     public ResponseEntity<DocumentoDto> cadastrarDocumento(@PathVariable long clienteId,
             @Valid @RequestBody DocumentoCadastroDto dto) {
         Documento criado = servico.criar(clienteId, conversor.paraEntidade(dto));
+        DocumentoDto resposta = conversor.paraResposta(criado);
+        adicionadorLink.adicionarLink(resposta);
         return ResponseEntity.created(URI.create("/documento/" + criado.getId()))
-                .body(conversor.paraResposta(criado));
+                .body(resposta);
     }
 
     @GetMapping("/documento/{id}")
     public ResponseEntity<DocumentoDto> obterDocumento(@PathVariable long id) {
-        return ResponseEntity.ok(conversor.paraResposta(servico.obterPorId(id)));
+        DocumentoDto resposta = conversor.paraResposta(servico.obterPorId(id));
+        adicionadorLink.adicionarLink(resposta);
+        return ResponseEntity.ok(resposta);
     }
 
     @PutMapping("/documento/{id}")
     public ResponseEntity<DocumentoDto> atualizarDocumento(@PathVariable long id,
             @Valid @RequestBody DocumentoAtualizacaoDto dto) {
         Documento atualizado = servico.atualizar(id, conversor.paraEntidade(dto));
-        return ResponseEntity.ok(conversor.paraResposta(atualizado));
+        DocumentoDto resposta = conversor.paraResposta(atualizado);
+        adicionadorLink.adicionarLink(resposta);
+        return ResponseEntity.ok(resposta);
     }
 
     @DeleteMapping("/documento/{id}")

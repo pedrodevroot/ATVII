@@ -21,6 +21,7 @@ import com.autobots.automanager.dtos.ClienteAtualizacaoDto;
 import com.autobots.automanager.dtos.ClienteCadastroDto;
 import com.autobots.automanager.dtos.ClienteRespostaDto;
 import com.autobots.automanager.entidades.Cliente;
+import com.autobots.automanager.modelo.AdicionadorLinkCliente;
 import com.autobots.automanager.servicos.ClienteServico;
 
 @RestController
@@ -31,30 +32,40 @@ public class ClienteControle {
     private ClienteServico servico;
     @Autowired
     private ClienteConversor conversor;
+    @Autowired
+    private AdicionadorLinkCliente adicionadorLink;
 
     @GetMapping("/{id}")
     public ResponseEntity<ClienteRespostaDto> obterCliente(@PathVariable long id) {
-        return ResponseEntity.ok(conversor.paraResposta(servico.obterPorId(id)));
+        ClienteRespostaDto resposta = conversor.paraResposta(servico.obterPorId(id));
+        adicionadorLink.adicionarLink(resposta);
+        return ResponseEntity.ok(resposta);
     }
 
     @GetMapping("/clientes")
     public ResponseEntity<List<ClienteRespostaDto>> obterClientes() {
-        return ResponseEntity.ok(conversor.paraResposta(servico.listar()));
+        List<ClienteRespostaDto> resposta = conversor.paraResposta(servico.listar());
+        adicionadorLink.adicionarLink(resposta);
+        return ResponseEntity.ok(resposta);
     }
 
     @PostMapping("/cadastro")
     public ResponseEntity<ClienteRespostaDto> cadastrarCliente(
             @Valid @RequestBody ClienteCadastroDto dto) {
         Cliente cadastrado = servico.cadastrar(conversor.paraEntidade(dto));
+        ClienteRespostaDto resposta = conversor.paraResposta(cadastrado);
+        adicionadorLink.adicionarLink(resposta);
         return ResponseEntity.created(URI.create("/cliente/" + cadastrado.getId()))
-                .body(conversor.paraResposta(cadastrado));
+                .body(resposta);
     }
 
     @PutMapping("/atualizar")
     public ResponseEntity<ClienteRespostaDto> atualizarCliente(
             @Valid @RequestBody ClienteAtualizacaoDto dto) {
         Cliente atualizado = servico.atualizar(conversor.paraEntidade(dto));
-        return ResponseEntity.ok(conversor.paraResposta(atualizado));
+        ClienteRespostaDto resposta = conversor.paraResposta(atualizado);
+        adicionadorLink.adicionarLink(resposta);
+        return ResponseEntity.ok(resposta);
     }
 
     @DeleteMapping("/excluir/{id}")

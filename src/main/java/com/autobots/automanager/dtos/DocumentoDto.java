@@ -3,10 +3,14 @@ package com.autobots.automanager.dtos;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 
+import org.springframework.hateoas.RepresentationModel;
+
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Data
-public class DocumentoDto {
+@EqualsAndHashCode(callSuper = false)
+public class DocumentoDto extends RepresentationModel<DocumentoDto> {
 
     @NotNull(message = "O id do documento e obrigatorio para atualizacao")
     private Long id;

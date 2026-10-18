@@ -3,10 +3,14 @@ package com.autobots.automanager.dtos;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
 
+import org.springframework.hateoas.RepresentationModel;
+
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Data
-public class TelefoneDto {
+@EqualsAndHashCode(callSuper = false)
+public class TelefoneDto extends RepresentationModel<TelefoneDto> {
 
     @NotNull(message = "O id do telefone e obrigatorio para atualizacao")
     private Long id;

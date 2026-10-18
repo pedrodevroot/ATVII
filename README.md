@@ -1,4 +1,4 @@
-# AutoBots — Microsserviço de Cadastro de Clientes
+# AutoBots — Microsserviço de Cadastro de Clientes (ATVII: RMM e HATEOAS)
 
 API REST para o CRUD de clientes do sistema de gestão **AutoBots**, voltado a
 lojas de manutenção veicular e venda de autopeças.
@@ -6,7 +6,12 @@ lojas de manutenção veicular e venda de autopeças.
 Primeiro microsserviço do projeto — os próximos (veículos, serviços, vendas)
 serão containers independentes na mesma rede Docker.
 
-**Atividade ATVI** — Prof. Dr. Eng. Gerson Penha
+**Atividade ATVII** — Prof. Dr. Eng. Gerson Penha
+
+Continuação da ATVI. Nesta etapa a API passou a atender os quatro níveis do
+modelo de maturidade de Richardson (RMM), incluindo o nível 3, **HATEOAS**: toda
+resposta traz os links para os recursos relacionados. Veja
+[Níveis de maturidade](#níveis-de-maturidade-rmm).
 
 ---
 
@@ -17,6 +22,7 @@ serão containers independentes na mesma rede Docker.
 | Java | 17 |
 | Spring Boot | 2.6.3 |
 | Spring Data JPA / Hibernate | 5.6 |
+| Spring HATEOAS | 1.4.1 |
 | PostgreSQL | 16 |
 | Docker Compose | — |
 
@@ -35,8 +41,8 @@ As portas `18080` (API) e `5433` (PostgreSQL) precisam estar livres.
 ## Como executar
 
 ```bash
-git clone https://github.com/pedrodevroot/ATVI.git
-cd ATVI
+git clone https://github.com/pedrodevroot/ATVII.git
+cd ATVII
 docker compose up -d --build
 ```
 
@@ -73,7 +79,7 @@ docker compose down -v     # para e apaga o banco
 ./mvnw test          # Windows: .\mvnw.cmd test
 ```
 
-São **175 testes automatizados**, em cerca de 20 segundos.
+São **196 testes automatizados**, em cerca de 20 segundos.
 
 Os testes **não precisam de Docker nem de PostgreSQL** — os de integração usam
 banco H2 em memória. Precisam apenas de **Java 17** instalado; o Maven vem junto
@@ -84,15 +90,100 @@ com o projeto, no `mvnw`.
 | Regras de domínio | 29 | JUnit 5 |
 | Conversores DTO | 24 | JUnit 5 |
 | Serviços | 46 | JUnit 5 + Mockito |
-| Controllers | 54 | MockMvc |
+| Controllers (incluindo os links) | 74 | MockMvc |
 | Mapeamento JPA | 12 | H2 |
-| Integração ponta a ponta | 10 | H2 |
+| Integração ponta a ponta (incluindo a navegação pelos links) | 11 | H2 |
 
 Para rodar os testes sem instalar Java, dentro de um container:
 
 ```bash
 docker run --rm -v "${PWD}:/app" -w /app maven:3.8.4-eclipse-temurin-17 mvn test
 ```
+
+> Com o VS Code (ou outra IDE Java) aberto no projeto, feche-o antes de rodar o
+> comando acima: a IDE e o Maven do container compilam ao mesmo tempo na pasta
+> `target` e corrompem as classes (`ClassFormatError`). Para rodar com a IDE
+> aberta, use este comando, que compila uma cópia do código dentro do container
+> e não toca na pasta `target`:
+>
+> ```bash
+> docker run --rm -v "${PWD}:/src:ro" maven:3.8.4-eclipse-temurin-17 sh -c "mkdir /app && cp -r /src/pom.xml /src/src /app && cd /app && mvn test"
+> ```
+
+---
+
+## Níveis de maturidade (RMM)
+
+O modelo de maturidade de Richardson mede o quanto uma API segue o estilo REST.
+Cada nível inclui o anterior.
+
+| Nível | Significado | Como a API atende |
+|---|---|---|
+| **0** — Uso do protocolo HTTP | A comunicação acontece por HTTP | Toda a API é exposta por HTTP em `http://localhost:18080` |
+| **1** — URI única por recurso | Cada recurso tem o seu próprio endereço | `/cliente/{id}`, `/telefone/{id}`, `/documento/{id}`, `/endereco/{id}` e as coleções `/cliente/{id}/telefones`, `/cliente/{id}/documentos`, `/cliente/{id}/enderecos` |
+| **2** — Uso dos métodos e suas semânticas | O método HTTP diz a ação e o status diz o resultado | `GET` lê, `POST` cria, `PUT` atualiza, `DELETE` remove; respostas `200`, `201` + `Location`, `204`, `400`, `404` e `409` |
+| **3** — HATEOAS | A resposta traz os links para os próximos passos | Toda resposta com corpo traz links gerados pelo Spring HATEOAS |
+
+### Nível 3: HATEOAS
+
+`GET http://localhost:18080/cliente/1` (trecho da resposta):
+
+```json
+{
+  "id": 1,
+  "nome": "Pedro Alcantara de Braganca e Bourbon",
+  "nomeSocial": "Dom Pedro",
+  "telefones": [ { "id": 1, "ddd": "21", "numero": "981234576" } ],
+  "_links": {
+    "self":       { "href": "http://localhost:18080/cliente/1" },
+    "clientes":   { "href": "http://localhost:18080/cliente/clientes" },
+    "telefones":  { "href": "http://localhost:18080/cliente/1/telefones" },
+    "documentos": { "href": "http://localhost:18080/cliente/1/documentos" },
+    "enderecos":  { "href": "http://localhost:18080/cliente/1/enderecos" }
+  }
+}
+```
+
+| Resposta | Links |
+|---|---|
+| Um cliente (`GET`, `POST`, `PUT`) | `self`, `clientes`, `telefones`, `documentos`, `enderecos` |
+| Lista de clientes | `self` em cada cliente |
+| Um telefone, documento ou endereço (`GET`, `POST`, `PUT`) | `self` |
+| Lista de telefones, documentos ou endereços | `self` em cada item |
+| `DELETE` (204) e respostas de erro | sem links |
+
+Nas listas o Spring representa os links de cada item como
+`"links": [ { "rel": "self", "href": "..." } ]`; num objeto único, como
+`"_links": { "self": { "href": "..." } }` (formato HAL).
+
+Com isso, um cliente da API precisa conhecer apenas o primeiro endereço. A partir
+de `GET /cliente/1` ele segue `telefones`, depois o `self` de um telefone, e assim
+por diante, sem montar nenhuma URL. O teste `navegacaoPelosLinks` do
+`IntegracaoCrudTest` faz exatamente esse caminho.
+
+**Como foi implementado:**
+
+| Parte | Arquivo |
+|---|---|
+| Dependência `spring-boot-starter-hateoas` | `pom.xml` |
+| DTOs de resposta estendem `RepresentationModel` | `ClienteRespostaDto`, `TelefoneDto`, `DocumentoDto`, `EnderecoDto` |
+| Contrato dos adicionadores de link | `modelo/AdicionadorLink` |
+| Montagem dos links com `WebMvcLinkBuilder` (`linkTo` + `methodOn`) | `modelo/AdicionadorLinkCliente`, `AdicionadorLinkTelefone`, `AdicionadorLinkDocumento`, `AdicionadorLinkEndereco` |
+| Links adicionados antes de cada resposta | os 4 controllers |
+
+Os links são construídos a partir dos métodos dos controllers, e não de textos
+fixos: se uma rota mudar, o link muda junto.
+
+### Escolhas de status no nível 2
+
+O código de apoio da atividade usa outros status em dois casos. Aqui a escolha
+foi seguir a semântica do HTTP:
+
+| Situação | Código de apoio | Esta API | Motivo |
+|---|---|---|---|
+| `GET` com sucesso | `302 Found` | `200 OK` | `302` indica redirecionamento para outro endereço, não sucesso |
+| Lista vazia | `404 Not Found` | `200 OK` com `[]` | A coleção existe; ela só não tem itens |
+| `DELETE` com sucesso | `200 OK`, id no corpo da requisição | `204 No Content`, id na URL | Não há conteúdo a devolver, e o recurso é identificado pela URI |
 
 ---
 
@@ -101,6 +192,9 @@ docker run --rm -v "${PWD}:/app" -w /app maven:3.8.4-eclipse-temurin-17 mvn test
 Base: `http://localhost:18080`
 
 Em todo `POST` e `PUT` o corpo é JSON (`Content-Type: application/json`).
+
+Toda resposta com corpo, menos as de erro, traz os links do recurso (veja
+[Nível 3: HATEOAS](#nível-3-hateoas)).
 
 Depois do `docker compose up`, o banco contém: cliente `1`, documentos `1` e `2`,
 endereço `1` e telefone `1`.
@@ -243,9 +337,9 @@ filho, o `id` dele é obrigatório.
 }
 ```
 
-**H** — número de documento duplicado (o RG `1500` já pertence ao cliente 1)
+**H** — número de documento duplicado (o CPF `00000000001` já pertence ao cliente 1)
 ```json
-{ "nome": "Documento Repetido", "documentos": [ { "tipo": "RG", "numero": "1500" } ] }
+{ "nome": "Documento Repetido", "documentos": [ { "tipo": "CPF", "numero": "00000000001" } ] }
 ```
 
 ### Respostas de erro
@@ -290,7 +384,19 @@ Erros de validação acrescentam a lista de campos, todos de uma vez:
 
 ---
 
-## Alterações em relação ao código inicial
+## Alterações da ATVII
+
+| O que mudou | Onde |
+|---|---|
+| Dependência do Spring HATEOAS | `pom.xml` |
+| DTOs de resposta passaram a carregar links | `ClienteRespostaDto`, `TelefoneDto`, `DocumentoDto`, `EnderecoDto` |
+| Interface e adicionadores de link | `AdicionadorLink` e os 4 `AdicionadorLink*` em `modelo` |
+| Respostas de `GET`, `POST` e `PUT` com links | `ClienteControle`, `TelefoneControle`, `DocumentoControle`, `EnderecoControle` |
+| 21 testes novos: links de cada resposta e navegação pelos links | os 4 testes de controller e `IntegracaoCrudTest` |
+
+Rotas, corpos, validações e status continuam os mesmos da ATVI.
+
+## Alterações em relação ao código inicial da ATVI
 
 | Problema | Correção |
 |---|---|

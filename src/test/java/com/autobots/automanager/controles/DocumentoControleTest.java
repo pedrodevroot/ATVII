@@ -30,10 +30,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.autobots.automanager.conversores.DocumentoConversor;
 import com.autobots.automanager.entidades.Documento;
 import com.autobots.automanager.excecoes.RecursoNaoEncontradoException;
+import com.autobots.automanager.modelo.AdicionadorLinkDocumento;
 import com.autobots.automanager.servicos.DocumentoServico;
 
 @WebMvcTest(DocumentoControle.class)
-@Import(DocumentoConversor.class)
+@Import({ DocumentoConversor.class, AdicionadorLinkDocumento.class })
 class DocumentoControleTest {
 
     @Autowired
@@ -204,5 +205,73 @@ class DocumentoControleTest {
 
         requisicao.perform(delete("/documento/999"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("GET /documento/{id}: link self do documento")
+    void obterPorIdComLinks() throws Exception {
+        when(servico.obterPorId(2L)).thenReturn(documento(2L, "CPF", "00000000001"));
+
+        requisicao.perform(get("/documento/2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$._links.self.href").value("http://localhost/documento/2"));
+    }
+
+    @Test
+    @DisplayName("GET /cliente/{id}/documentos: link self em cada documento da lista")
+    void listarComLinks() throws Exception {
+        when(servico.listarPorCliente(1L))
+                .thenReturn(List.of(documento(1L, "RG", "1500"), documento(2L, "CPF", "00000000001")));
+
+        requisicao.perform(get("/cliente/1/documentos"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].links[0].rel").value("self"))
+                .andExpect(jsonPath("$[0].links[0].href").value("http://localhost/documento/1"))
+                .andExpect(jsonPath("$[1].links[0].rel").value("self"))
+                .andExpect(jsonPath("$[1].links[0].href").value("http://localhost/documento/2"));
+    }
+
+    @Test
+    @DisplayName("POST /cliente/{id}/documentos: resposta com link self do documento criado")
+    void criarComLinks() throws Exception {
+        when(servico.criar(anyLong(), any(Documento.class)))
+                .thenReturn(documento(5L, "CNH", "55443322"));
+
+        String corpo = """
+                { "tipo": "CNH", "numero": "55443322" }
+                """;
+
+        requisicao.perform(post("/cliente/1/documentos")
+                .contentType(MediaType.APPLICATION_JSON).content(corpo))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$._links.self.href").value("http://localhost/documento/5"));
+    }
+
+    @Test
+    @DisplayName("PUT /documento/{id}: resposta com link self do documento atualizado")
+    void atualizarComLinks() throws Exception {
+        when(servico.atualizar(anyLong(), any(Documento.class)))
+                .thenReturn(documento(2L, "CNH-E", "1500"));
+
+        String corpo = """
+                { "tipo": "CNH-E" }
+                """;
+
+        requisicao.perform(put("/documento/2")
+                .contentType(MediaType.APPLICATION_JSON).content(corpo))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$._links.self.href").value("http://localhost/documento/2"));
+    }
+
+    @Test
+    @DisplayName("GET /documento/{id}: resposta de erro nao tem links")
+    void erroSemLinks() throws Exception {
+        when(servico.obterPorId(999L))
+                .thenThrow(new RecursoNaoEncontradoException("Documento", 999L));
+
+        requisicao.perform(get("/documento/999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$._links").doesNotExist())
+                .andExpect(jsonPath("$.links").doesNotExist());
     }
 }

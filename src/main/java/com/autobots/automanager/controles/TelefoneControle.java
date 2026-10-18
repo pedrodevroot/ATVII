@@ -20,6 +20,7 @@ import com.autobots.automanager.dtos.TelefoneAtualizacaoDto;
 import com.autobots.automanager.dtos.TelefoneCadastroDto;
 import com.autobots.automanager.dtos.TelefoneDto;
 import com.autobots.automanager.entidades.Telefone;
+import com.autobots.automanager.modelo.AdicionadorLinkTelefone;
 import com.autobots.automanager.servicos.TelefoneServico;
 
 @RestController
@@ -29,30 +30,40 @@ public class TelefoneControle {
     private TelefoneServico servico;
     @Autowired
     private TelefoneConversor conversor;
+    @Autowired
+    private AdicionadorLinkTelefone adicionadorLink;
 
     @GetMapping("/cliente/{clienteId}/telefones")
     public ResponseEntity<List<TelefoneDto>> obterTelefones(@PathVariable long clienteId) {
-        return ResponseEntity.ok(conversor.paraResposta(servico.listarPorCliente(clienteId)));
+        List<TelefoneDto> resposta = conversor.paraResposta(servico.listarPorCliente(clienteId));
+        adicionadorLink.adicionarLink(resposta);
+        return ResponseEntity.ok(resposta);
     }
 
     @PostMapping("/cliente/{clienteId}/telefones")
     public ResponseEntity<TelefoneDto> cadastrarTelefone(@PathVariable long clienteId,
             @Valid @RequestBody TelefoneCadastroDto dto) {
         Telefone criado = servico.criar(clienteId, conversor.paraEntidade(dto));
+        TelefoneDto resposta = conversor.paraResposta(criado);
+        adicionadorLink.adicionarLink(resposta);
         return ResponseEntity.created(URI.create("/telefone/" + criado.getId()))
-                .body(conversor.paraResposta(criado));
+                .body(resposta);
     }
 
     @GetMapping("/telefone/{id}")
     public ResponseEntity<TelefoneDto> obterTelefone(@PathVariable long id) {
-        return ResponseEntity.ok(conversor.paraResposta(servico.obterPorId(id)));
+        TelefoneDto resposta = conversor.paraResposta(servico.obterPorId(id));
+        adicionadorLink.adicionarLink(resposta);
+        return ResponseEntity.ok(resposta);
     }
 
     @PutMapping("/telefone/{id}")
     public ResponseEntity<TelefoneDto> atualizarTelefone(@PathVariable long id,
             @Valid @RequestBody TelefoneAtualizacaoDto dto) {
         Telefone atualizado = servico.atualizar(id, conversor.paraEntidade(dto));
-        return ResponseEntity.ok(conversor.paraResposta(atualizado));
+        TelefoneDto resposta = conversor.paraResposta(atualizado);
+        adicionadorLink.adicionarLink(resposta);
+        return ResponseEntity.ok(resposta);
     }
 
     @DeleteMapping("/telefone/{id}")

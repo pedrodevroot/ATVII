@@ -4,10 +4,14 @@ import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Size;
 
+import org.springframework.hateoas.RepresentationModel;
+
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Data
-public class EnderecoDto {
+@EqualsAndHashCode(callSuper = false)
+public class EnderecoDto extends RepresentationModel<EnderecoDto> {
 
     @NotNull(message = "O id do endereco e obrigatorio para atualizacao")
     private Long id;

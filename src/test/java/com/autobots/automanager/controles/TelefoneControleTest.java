@@ -29,10 +29,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.autobots.automanager.conversores.TelefoneConversor;
 import com.autobots.automanager.entidades.Telefone;
 import com.autobots.automanager.excecoes.RecursoNaoEncontradoException;
+import com.autobots.automanager.modelo.AdicionadorLinkTelefone;
 import com.autobots.automanager.servicos.TelefoneServico;
 
 @WebMvcTest(TelefoneControle.class)
-@Import(TelefoneConversor.class)
+@Import({ TelefoneConversor.class, AdicionadorLinkTelefone.class })
 class TelefoneControleTest {
 
     @Autowired
@@ -221,5 +222,73 @@ class TelefoneControleTest {
 
         requisicao.perform(delete("/telefone/999"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("GET /telefone/{id}: link self do telefone")
+    void obterPorIdComLinks() throws Exception {
+        when(servico.obterPorId(2L)).thenReturn(telefone(2L, "21", "981234576"));
+
+        requisicao.perform(get("/telefone/2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$._links.self.href").value("http://localhost/telefone/2"));
+    }
+
+    @Test
+    @DisplayName("GET /cliente/{id}/telefones: link self em cada telefone da lista")
+    void listarComLinks() throws Exception {
+        when(servico.listarPorCliente(1L))
+                .thenReturn(List.of(telefone(1L, "21", "981234576"), telefone(2L, "13", "981234567")));
+
+        requisicao.perform(get("/cliente/1/telefones"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].links[0].rel").value("self"))
+                .andExpect(jsonPath("$[0].links[0].href").value("http://localhost/telefone/1"))
+                .andExpect(jsonPath("$[1].links[0].rel").value("self"))
+                .andExpect(jsonPath("$[1].links[0].href").value("http://localhost/telefone/2"));
+    }
+
+    @Test
+    @DisplayName("POST /cliente/{id}/telefones: resposta com link self do telefone criado")
+    void criarComLinks() throws Exception {
+        when(servico.criar(anyLong(), any(Telefone.class)))
+                .thenReturn(telefone(5L, "13", "981234567"));
+
+        String corpo = """
+                { "ddd": "13", "numero": "981234567" }
+                """;
+
+        requisicao.perform(post("/cliente/1/telefones")
+                .contentType(MediaType.APPLICATION_JSON).content(corpo))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$._links.self.href").value("http://localhost/telefone/5"));
+    }
+
+    @Test
+    @DisplayName("PUT /telefone/{id}: resposta com link self do telefone atualizado")
+    void atualizarComLinks() throws Exception {
+        when(servico.atualizar(anyLong(), any(Telefone.class)))
+                .thenReturn(telefone(2L, "99", "981234576"));
+
+        String corpo = """
+                { "ddd": "99" }
+                """;
+
+        requisicao.perform(put("/telefone/2")
+                .contentType(MediaType.APPLICATION_JSON).content(corpo))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$._links.self.href").value("http://localhost/telefone/2"));
+    }
+
+    @Test
+    @DisplayName("GET /telefone/{id}: resposta de erro nao tem links")
+    void erroSemLinks() throws Exception {
+        when(servico.obterPorId(999L))
+                .thenThrow(new RecursoNaoEncontradoException("Telefone", 999L));
+
+        requisicao.perform(get("/telefone/999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$._links").doesNotExist())
+                .andExpect(jsonPath("$.links").doesNotExist());
     }
 }
